@@ -30,13 +30,15 @@ def load_yaml(fname):
     return yamlparsed
 
 
-def prep_yaml(files):
+def prep_yaml(files, as_function=False):
     r"""Prepare yaml to be parsed by Cerberus using schema including covering
     backwards compatible options.
 
     Args:
         files (str, list): Either the path to a single yaml file or a list of
             yaml files.
+        as_function (bool, optional): If True, the missing input/output channels
+            will be created for using model(s) as a function. Defaults to False.
 
     Returns:
         dict: YAML ready to be parsed using schema.
@@ -64,6 +66,10 @@ def prep_yaml(files):
                 if isinstance(x, dict):
                     x.setdefault('working_dir', yml['working_dir'])
             yml_all[k] += yml[k]
+    # Add dummy model for the function
+    yml_all['models'].append({'name': 'function_model',
+                              'language': 'function',
+                              'args': 'function'})
     # Prep models and connections
     iodict = {'inputs': {}, 'outputs': {}, 'connections': []}
     for yml in yml_all['models']:
@@ -321,12 +327,14 @@ def cdriver2filetype(driver):
     return ftype
 
 
-def parse_yaml(files):
+def parse_yaml(files, as_function=False):
     r"""Parse list of yaml files.
 
     Args:
         files (str, list): Either the path to a single yaml file or a list of
             yaml files.
+        as_function (bool, optional): If True, the missing input/output channels
+            will be created for using model(s) as a function. Defaults to False.
 
     Raises:
         ValueError: If the yml dictionary is missing a required keyword or has
@@ -339,7 +347,7 @@ def parse_yaml(files):
 
     """
     # Parse files using schema
-    yml_prep = prep_yaml(files)
+    yml_prep = prep_yaml(files, as_function=as_function)
     v = get_schema().validator
     yml_norm = v.normalized(yml_prep)
     if not v.validate(yml_norm):

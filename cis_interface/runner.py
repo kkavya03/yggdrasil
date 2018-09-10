@@ -34,6 +34,46 @@ COLOR_NORMAL = '\033[0m'
 #                         prog + ': %(message)s' + COLOR_NORMAL)
 
 
+class CisFunction(CisClass):
+    r"""This class wraps function-like behavior around a model.
+
+    Arguments:
+        model_yaml (str): Full path to yaml containing model information
+            including the location of the source code and any input(s)/output(s).
+        **kwargs: Additional keyword arguments are passed to the CisRunner
+            constructor.
+
+    Attributes:
+        input_channels (list): A list of input channels
+        output_channels (list): A list of output channels.
+        runner (CisRunner): Runner for model.
+
+    """
+
+    def __init__(self, model_yaml, namespace=None, **kwargs):
+        from cis_interface.interface.CisInterface import CisInput, CisOutput
+        if namespace is None:
+            namespace = cis_cfg.get('rmq', 'namespace', False)
+        # Create and start runner in another process
+        self.runner = CisRunner(model_yaml, namespace,
+                                as_function=True, **kwargs)
+        # Create input/output channels
+        self.input_channels = []
+        self.output_channels = []
+        # Start the drivers
+        self.runner.run()
+
+    @property
+    def inputs(self):
+        r"""list: A list of the names of model inputs."""
+        return [x.name for x in self.input_channels]
+
+    @property
+    def outputs(self):
+        r"""list: A list of the names of model outputs."""
+        return [x.name for x in self.output_channels]
+
+
 class CisRunner(CisClass):
     r"""This class handles the orchestration of starting the model and
     IO drivers, monitoring their progress, and cleaning up on exit.
@@ -53,6 +93,8 @@ class CisRunner(CisClass):
             Defaults to environment variable 'RMQ_DEBUG'.
         cis_debug_prefix (str, optional): Prefix for CiS debug messages.
             Defaults to namespace.
+        as_function (bool, optional): If True, the missing input/output channels
+            will be created for using model(s) as a function. Defaults to False.
 
     Attributes:
         namespace (str): Name that should be used to uniquely identify any RMQ
@@ -66,13 +108,15 @@ class CisRunner(CisClass):
             drivers.
         interrupt_time (float): Time of last interrupt signal.
         error_flag (bool): True if one or more models raises an error.
+        as_function (bool): If True, the missing input/output channels will be
+            created for using model(s) as a function.
 
     ..todo:: namespace, host, and rank do not seem strictly necessary.
 
     """
     def __init__(self, modelYmls, namespace, host=None, rank=0,
                  cis_debug_level=None, rmq_debug_level=None,
-                 cis_debug_prefix=None):
+                 cis_debug_prefix=None, as_function=False):
         super(CisRunner, self).__init__('runner')
         self.namespace = namespace
         self.host = host
@@ -86,6 +130,7 @@ class CisRunner(CisClass):
         self._outputchannels = {}
         self._old_handlers = {}
         self.error_flag = False
+        self.as_function = as_function
         # Setup logging
         # if cis_debug_prefix is None:
         #     cis_debug_prefix = namespace
@@ -93,7 +138,7 @@ class CisRunner(CisClass):
         # Update environment based on config
         cfg_environment()
         # Parse yamls
-        drivers = yamlfile.parse_yaml(modelYmls)
+        drivers = yamlfile.parse_yaml(modelYmls, as_function=as_function)
         self.inputdrivers = drivers['input']
         self.outputdrivers = drivers['output']
         self.modeldrivers = drivers['model']
@@ -103,6 +148,8 @@ class CisRunner(CisClass):
             self._inputchannels[x['args']] = x
         # print(pformat(self.inputdrivers), pformat(self.outputdrivers),
         #       pformat(self.modeldrivers))
+        if self.as_function:
+            atexit.register(self.atexit)
         # atexit.register(self.cleanup)
 
     def pprint(self, *args):
@@ -165,15 +212,22 @@ class CisRunner(CisClass):
         for k, v in self._old_handlers.items():
             signal.signal(k, v)
 
+    def atexit(self, *args, **kwargs):
+        r"""At exit ensure that the runner has stopped and cleaned up."""
+        self.info("cleaning up.")
+        self.reset_signal_handler()
+        self.closeChannels()
+        self.cleanup()
+
     def run(self, signal_handler=None):
         r"""Run all of the models and wait for them to exit."""
         self.loadDrivers()
         self.startDrivers()
         self.set_signal_handler(signal_handler)
-        self.waitModels()
-        self.reset_signal_handler()
-        self.closeChannels()
-        self.cleanup()
+        if not self.as_function:
+            self.waitModels()
+            self.info("atexit in run")
+            self.atexit()
 
     @property
     def all_drivers(self):

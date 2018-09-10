@@ -1,6 +1,7 @@
 r"""This package provides a framework for integrating models across languages
 such that they can be run simultaneously, passing input back and forth."""
 from cis_interface import platform
+from cis_interface.runner import CisFunction
 import os
 import sys
 import nose
@@ -11,6 +12,22 @@ if platform._is_win:  # pragma: windows
     # This is required to fix crash on Windows in case of Ctrl+C
     # https://github.com/ContinuumIO/anaconda-issues/issues/905#issuecomment-232498034
     os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = 'T'
+
+
+def import_as_function(model_yaml, **kwargs):
+    r"""Import a model as a function from a yaml specification file.
+
+    Args:
+        model_yaml (str, list): Full path to model yaml describing the model(s)
+            and an inputs or outputs.
+        **kwargs: Additional keyword arguments are passed to the CisFunction
+            constructor.
+
+    Returns:
+        CisFunction: Callable wrapper for model.
+
+    """
+    return CisFunction(model_yaml, **kwargs)
 
 
 def run_nose(verbose=False, nocapture=False, stop=False,
