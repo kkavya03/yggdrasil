@@ -106,7 +106,6 @@ class CisFunction(CisClass):
         # Receive
         out = {}
         for v in self.returns:
-            print('receiving', v)
             flag, data = self.input_channels[v].recv()
             if not flag:
                 raise RuntimeError("Failed to receive variable %s" % v)
