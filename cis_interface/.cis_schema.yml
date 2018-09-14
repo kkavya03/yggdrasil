@@ -305,6 +305,7 @@ model:
     - cmake
     - cpp
     - executable
+    - function
     - lpy
     - make
     - matlab
@@ -366,6 +367,8 @@ model:
 model_schema_subtypes:
   CMakeModelDriver:
   - cmake
+  FunctionModelDriver:
+  - function
   GCCModelDriver:
   - c
   - c++

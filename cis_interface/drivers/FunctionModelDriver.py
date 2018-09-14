@@ -15,9 +15,14 @@ class FunctionModelDriver(ModelDriver):
 
     _language = 'function'
 
-    def __init__(self, *args, **kwargs):
-        super(FunctionModelDriver, self).__init__(*args, **kwargs)
+    def before_start(self):
+        r"""Actions to perform before the run starts."""
+        pass
 
+    def before_loop(self):
+        r"""Actions before loop."""
+        pass
 
-    
-    
+    def run_loop(self):
+        r"""Loop to check if model is still running and forward output."""
+        pass

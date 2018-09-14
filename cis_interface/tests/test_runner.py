@@ -3,7 +3,7 @@ import nose.tools as nt
 import unittest
 import signal
 import uuid
-from cis_interface import runner, tools, platform
+from cis_interface import runner, tools, platform, import_as_function
 from cis_interface.tests import CisTestBase
 # from cis_interface.tests import yamls as sc_yamls
 from cis_interface.examples import yamls as ex_yamls
@@ -57,6 +57,20 @@ def test_runner_error():
     r"""Test error on missing yaml."""
     nt.assert_raises(IOError, runner.CisRunner,
                      ['fake_yaml.yml'], 'test_cis_run')
+
+
+def test_import_as_function():
+    r"""Test import_as_function."""
+    yamlfile = ex_yamls['fakeplant']['python'][0]
+    fmodel = import_as_function(yamlfile)
+    input_args = {}
+    for x in fmodel.arguments:
+        input_args[x] = 1.0
+    result = fmodel(**input_args)
+    for x in fmodel.returns:
+        assert(x in result)
+    fmodel.stop()
+    fmodel.stop()
     
 
 class TestCisRunner(CisTestBase):

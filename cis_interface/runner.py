@@ -1,7 +1,7 @@
 """This module provides tools for running models using cis_interface."""
 import sys
 import logging
-# import atexit
+import atexit
 import os
 import signal
 from pprint import pformat
@@ -38,14 +38,15 @@ class CisFunction(CisClass):
     r"""This class wraps function-like behavior around a model.
 
     Arguments:
-        model_yaml (str): Full path to yaml containing model information
-            including the location of the source code and any input(s)/output(s).
+        model_yaml (str, list): Full path to one or more yaml files containing
+            model information including the location of the source code and any
+            input(s)/output(s).
         **kwargs: Additional keyword arguments are passed to the CisRunner
             constructor.
 
     Attributes:
-        input_channels (list): A list of input channels
-        output_channels (list): A list of output channels.
+        input_channels (dict): Input channels providing access to model output.
+        output_channels (dict): Output channels providing access to model input.
         runner (CisRunner): Runner for model.
 
     """
@@ -57,21 +58,87 @@ class CisFunction(CisClass):
         # Create and start runner in another process
         self.runner = CisRunner(model_yaml, namespace,
                                 as_function=True, **kwargs)
-        # Create input/output channels
-        self.input_channels = []
-        self.output_channels = []
         # Start the drivers
         self.runner.run()
+        self.model_driver = self.runner.modeldrivers['function_model']
+        # Create input/output channels
+        self.input_channels = {}
+        self.output_channels = {}
+        for drv in self.model_driver['input_drivers']:
+            os.environ.update(**drv['instance'].env)
+            var_name = drv['name'].split('function_')[-1]
+            self.input_channels[var_name] = CisInput(drv['name'])
+        for drv in self.model_driver['output_drivers']:
+            var_name = drv['name'].split('function_')[-1]
+            os.environ.update(**drv['instance'].env)
+            # TODO: Use proper data type or pass format string via
+            # environment variable
+            self.output_channels[var_name] = CisOutput(
+                drv['name'], format_str=drv.get('format_str', None))
+        self._stop_called = False
+        atexit.register(self.stop)
+
+    def __call__(self, **kwargs):
+        r"""Call the model as a function by sending variables.
+
+        Args:
+           **kwargs: Any keyword arguments are expected to be named input
+               variables for the model.
+
+        Raises:
+            RuntimeError: If an input argument is missing.
+            RuntimeError: If sending an input argument to a model fails.
+            RuntimeError: If receiving an output value from a model fails.
+
+        Returns:
+            dict: Returned values for each return variable.
+
+        """
+        # Check for arguments
+        for a in self.arguments:
+            if a not in kwargs:
+                raise RuntimeError("Required argument %s not provided." % a)
+        # Send
+        for a in self.arguments:
+            flag = self.output_channels[a].send(kwargs[a])
+            if not flag:
+                raise RuntimeError("Failed to send variable %s" % a)
+        # Receive
+        out = {}
+        for v in self.returns:
+            print('receiving', v)
+            flag, data = self.input_channels[v].recv()
+            if not flag:
+                raise RuntimeError("Failed to receive variable %s" % v)
+            out[v] = data
+        return out
 
     @property
-    def inputs(self):
-        r"""list: A list of the names of model inputs."""
-        return [x.name for x in self.input_channels]
+    def arguments(self):
+        r"""list: Names of arguments to the model."""
+        return sorted([x for x in self.output_channels.keys()])
 
     @property
-    def outputs(self):
-        r"""list: A list of the names of model outputs."""
-        return [x.name for x in self.output_channels]
+    def returns(self):
+        r"""list: Names of variables the model returns."""
+        return sorted([x for x in self.input_channels.keys()])
+
+    def stop(self):
+        r"""Stop the model(s) from running."""
+        if self._stop_called:
+            return
+        self._stop_called = True
+        for x in self.output_channels.values():
+            x.send_eof()
+        for x in self.input_channels.values():
+            x.close()
+        self.model_driver['instance'].terminate()
+        self.runner.waitModels()
+        for x in self.output_channels.values():
+            x.close()
+        self.runner.atexit()
+        # self.runner.terminate()
+        # self.runner.atexit()
 
 
 class CisRunner(CisClass):
@@ -148,8 +215,6 @@ class CisRunner(CisClass):
             self._inputchannels[x['args']] = x
         # print(pformat(self.inputdrivers), pformat(self.outputdrivers),
         #       pformat(self.modeldrivers))
-        if self.as_function:
-            atexit.register(self.atexit)
         # atexit.register(self.cleanup)
 
     def pprint(self, *args):
@@ -214,7 +279,7 @@ class CisRunner(CisClass):
 
     def atexit(self, *args, **kwargs):
         r"""At exit ensure that the runner has stopped and cleaned up."""
-        self.info("cleaning up.")
+        self.debug('')
         self.reset_signal_handler()
         self.closeChannels()
         self.cleanup()
@@ -226,7 +291,6 @@ class CisRunner(CisClass):
         self.set_signal_handler(signal_handler)
         if not self.as_function:
             self.waitModels()
-            self.info("atexit in run")
             self.atexit()
 
     @property
@@ -465,7 +529,8 @@ class CisRunner(CisClass):
 
         """
         for drv in self.io_drivers(model['name']):
-            drv['models'].remove(model['name'])
+            if model['name'] in drv['models']:
+                drv['models'].remove(model['name'])
             if not drv['instance'].is_alive():
                 continue
             if (len(drv['models']) == 0):

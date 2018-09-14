@@ -86,7 +86,14 @@ def test_guess_serializer():
     test_list = [(arr_mix, dict(field_names=field_names, format_str=fmt_arr,
                                 stype=2, as_array=1)),
                  (arr_mix[0].tolist(), dict(format_str=fmt, stype=1)),
-                 ('hello', dict(stype=0))]
+                 ('hello', dict(stype=0)),
+                 (float(1.0), dict(format_str=backwards.unicode2bytes('%g'),
+                                   stype=1)),
+                 (np.int64(1), dict(format_str=backwards.unicode2bytes('%ld'),
+                                    stype=1)),
+                 (np.ones(5, float), dict(format_str=backwards.unicode2bytes('%g\n'),
+                                          field_names=[backwards.unicode2bytes('f0')],
+                                          as_array=1, stype=2))]
     for obj, sinfo_ans in test_list:
         sinfo_res = serialize.guess_serializer(obj)
         s = serialize.get_serializer(**sinfo_res)
@@ -397,6 +404,14 @@ def test_format2table():
     nt.assert_equal(out, serialize.format2table(fmt))
     nt.assert_equal(fmt, serialize.table2format(fmts=out['fmts']))
     nt.assert_raises(RuntimeError, serialize.format2table, "%5s,%ld\t%g\n")
+    out_single = {'delimiter': backwards.unicode2bytes('\t'),
+                  'newline': backwards.unicode2bytes('\n'),
+                  'comment': backwards.unicode2bytes('# '),
+                  'fmts': backwards.unicode2bytes('%f')}
+    fmt_single = backwards.unicode2bytes("# %f\n")
+    nt.assert_equal(fmt_single, serialize.table2format(**out_single))
+    out_single['fmts'] = [out_single['fmts']]
+    nt.assert_equal(out_single, serialize.format2table(fmt_single))
 
 
 def test_array_to_table():

@@ -41,8 +41,14 @@ def guess_serializer(msg, **kwargs):
     if sinfo.get('stype', 0) > 3:
         # Don't guess for Pandas, Pickle, Map
         pass
+    elif isinstance(msg, backwards.string_types):
+        # Don't do anything for strings
+        pass
     elif isinstance(msg, np.ndarray):
-        names = [backwards.unicode2bytes(n) for n in msg.dtype.names]
+        if msg.dtype.names is None:
+            names = [backwards.unicode2bytes('f0')]
+        else:
+            names = [backwards.unicode2bytes(n) for n in msg.dtype.names]
         sinfo.setdefault('field_names', names)
         sinfo.setdefault('format_str', table2format(msg.dtype, **kws_fmt))
         sinfo.setdefault('as_array', True)
@@ -61,6 +67,9 @@ def guess_serializer(msg, **kwargs):
             format_str = format_str.replace(backwards.unicode2bytes('%1s'),
                                             backwards.unicode2bytes('%s'))
             sinfo.setdefault('format_str', format_str)
+    elif 'format_str' not in sinfo:
+        format_str = nptype2cformat(np.dtype(type(msg)), asbytes=True)
+        sinfo.setdefault('format_str', format_str)
     return sinfo
 
 
@@ -662,8 +671,11 @@ def table2format(fmts=[], delimiter=None, newline=None, comment=None):
         comment = _default_comment
     if isinstance(fmts, np.dtype):
         fmts = nptype2cformat(fmts)
-    bytes_fmts = [backwards.unicode2bytes(f) for f in fmts]
-    fmt_str = comment + delimiter.join(bytes_fmts) + newline
+    if isinstance(fmts, backwards.string_types):
+        fmt_str = comment + backwards.unicode2bytes(fmts) + newline
+    else:
+        bytes_fmts = [backwards.unicode2bytes(f) for f in fmts]
+        fmt_str = comment + delimiter.join(bytes_fmts) + newline
     return fmt_str
 
 

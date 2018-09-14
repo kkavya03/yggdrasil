@@ -1,4 +1,5 @@
 import os
+import copy
 import pprint
 import pystache
 import yaml
@@ -30,18 +31,15 @@ def load_yaml(fname):
     return yamlparsed
 
 
-def prep_yaml(files, as_function=False):
-    r"""Prepare yaml to be parsed by Cerberus using schema including covering
-    backwards compatible options.
+def join_yaml(files):
+    r"""Combine contents of multiple YAML files.
 
     Args:
         files (str, list): Either the path to a single yaml file or a list of
             yaml files.
-        as_function (bool, optional): If True, the missing input/output channels
-            will be created for using model(s) as a function. Defaults to False.
 
     Returns:
-        dict: YAML ready to be parsed using schema.
+        dict: Combined YAML contents.
 
     """
     # Load each file
@@ -66,10 +64,21 @@ def prep_yaml(files, as_function=False):
                 if isinstance(x, dict):
                     x.setdefault('working_dir', yml['working_dir'])
             yml_all[k] += yml[k]
-    # Add dummy model for the function
-    yml_all['models'].append({'name': 'function_model',
-                              'language': 'function',
-                              'args': 'function'})
+    return yml_all
+
+
+def prep_yaml(yml_all):
+    r"""Prepare yaml to be parsed by Cerberus using schema including covering
+    backwards compatible options.
+
+    Args:
+        yml_all (dict): Combined yaml contents to be processed prior to using
+            schema.
+
+    Returns:
+        dict: YAML ready to be parsed using schema.
+
+    """
     # Prep models and connections
     iodict = {'inputs': {}, 'outputs': {}, 'connections': []}
     for yml in yml_all['models']:
@@ -346,8 +355,10 @@ def parse_yaml(files, as_function=False):
         dict: Dictionary of information parsed from the yamls.
 
     """
+    # Join yaml and prep
+    yml_join = join_yaml(files)
+    yml_prep = prep_yaml(yml_join)
     # Parse files using schema
-    yml_prep = prep_yaml(files, as_function=as_function)
     v = get_schema().validator
     yml_norm = v.normalized(yml_prep)
     if not v.validate(yml_norm):
@@ -360,6 +371,9 @@ def parse_yaml(files, as_function=False):
     for k in ['models', 'connections']:
         for yml in yml_all[k]:
             existing = parse_component(yml, k[:-1], existing=existing)
+    # Patch missing connections between input/outputs
+    if as_function:
+        existing = add_model_function(existing)
     # Make sure that I/O channels initialized
     for io in ['input', 'output']:
         for k, v in existing[io].items():
@@ -368,6 +382,52 @@ def parse_yaml(files, as_function=False):
                     io, k))
     # Link io drivers back to models
     existing = link_model_io(existing)
+    return existing
+
+
+def add_model_function(existing):
+    r"""Patch input/output channels that are not connected to a function model.
+
+    Args:
+        existing (dict): Dictionary of existing components.
+
+    Raises:
+
+    Returns:
+        dict: Updated dictionary of components.
+
+    """
+    new_model = {'name': 'function_model',
+                 'language': 'function',
+                 'args': 'function',
+                 'working_dir': os.getcwd(),
+                 'inputs': [],
+                 'outputs': []}
+    new_connections = []
+    # Locate unmatched channels
+    miss = {}
+    dir2opp = {'input': 'output', 'output': 'input'}
+    for io in dir2opp.keys():
+        miss[io] = [k for k in existing[io].keys()]
+    for conn in existing['connection'].values():
+        for io1, io2 in dir2opp.items():
+            if (io1 in conn):
+                for x in conn[io1]:
+                    if x in miss[io2]:
+                        miss[io2].remove(x)
+    # Create connections to function model
+    for io1, io2 in dir2opp.items():
+        for i in miss[io1]:
+            function_channel = 'function_%s' % i
+            function_comm = copy.deepcopy(existing[io1][i])
+            function_comm['name'] = function_channel
+            new_model[io2 + 's'].append(function_comm)
+            new_connections.append({io1: function_channel,
+                                    io2: i})
+    # Parse new components
+    existing = parse_component(new_model, 'model', existing=existing)
+    for new_conn in new_connections:
+        existing = parse_component(new_conn, 'connection', existing=existing)
     return existing
 
 
