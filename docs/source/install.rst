@@ -4,31 +4,18 @@
 Installation
 ############
 
-Conda Installation + pip (recommended)
---------------------------------------
+Conda Installation (recommended)
+--------------------------------
 
-We are still working to create conda wheels for |cis_interface| on 
-`conda-forge`, but you can install some of the more difficult dependencies 
-using conda, particularly the ZeroMQ C and C++ libraries. To do so call::
-
-  $ conda install -c conda-forge zeromq czmq
-
-You can then install |cis_interface| from 
-`PyPI <https://pypi.org/project/cis_interface/>`_ using ``pip``::
-
-  $ pip install cis_interface
-
-.. There are conda wheels available for |cis_interface| on 
-   `conda-forge <>`_. You can install |cis_interface| by calling::
-   $ conda install -c conda-forge cis_interface
-   from your terminal prompt (or Anaconda prompt on Windows). This will 
-   install |cis_interface| and all of its dependencies in your active
-   conda environment.
-
-In the future when the conda wheels are available, you will only need to 
-run::
+There are conda distributions available for |cis_interface| from 
+`conda-forge <https://github.com/conda-forge/cis_interface-feedstock>`_. 
+You can install |cis_interface| from conda-forge by calling::
 
   $ conda install -c conda-forge cis_interface
+
+from your terminal prompt (or Anaconda prompt on Windows). This will 
+install |cis_interface| and all of its dependencies in your active
+conda environment from the ``conda-forge`` channel.
 
 
 Manual Installation
@@ -75,7 +62,7 @@ script (e.g. ``.bashrc`` or ``.bash_profile``), using one of the following::
   $ set PATH "%PATH%:<scripts_dir>   # (windows)
 
 These commands will only add the directory to your path for the current 
-session. For the change to be permanent on Linux/OSX, the appropriate command 
+session. For the change to be permanent on Linux/MacOS, the appropriate command 
 from above can be added to your ``.bashrc`` or ``.bash_profile``. On 
 Windows (>=7), the following command will permanently modify your path::
 
@@ -104,7 +91,7 @@ that it cannot find these libraries, you can manually set them in your
 
 .. note::
    Although not required, the ZeroMQ libraries are also recommended for message 
-   passing on Linux and Mac OSX operating systems as the IPC V message queues 
+   passing on Linux and MacOS operating systems as the IPC V message queues 
    have default upper limits of 2048 bytes on some operating systems and will 
    have to send larger messages piecemeal, adding to the message passing 
    overhead.

@@ -33,7 +33,7 @@ prompt (or Anaconda prompt for Windows)::
 
   $ conda create -n cis python=3.6
 
-On Linux/OSX, the created environment can be activated by calling::
+On Linux/MacOS, the created environment can be activated by calling::
 
   $ source activate cis
 
@@ -52,7 +52,7 @@ Installing |cis_interface|
 
 Directions for installing the |cis_interface| package and its dependencies 
 can be found :ref:`here <install_rst>`. We recommend installing via 
-conda and pip for the purpose of the hackathon.
+conda and/or pip for the purpose of the hackathon.
 
 
 Get Hackathon Materials
