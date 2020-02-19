@@ -621,8 +621,10 @@ def table2format(fmts=[], delimiter=None, newline=None, comment=None):
         comment = _default_comment
     if isinstance(fmts, np.dtype):
         fmts = nptype2cformat(fmts)
-    bytes_fmts = [backwards.as_bytes(f) for f in fmts]
-    fmt_str = comment + delimiter.join(bytes_fmts) + newline
+    bytes_fmts = backwards.as_bytes(fmts, recurse=True)
+    fmt_str = (backwards.as_bytes(comment)
+               + backwards.as_bytes(delimiter).join(bytes_fmts)
+               + backwards.as_bytes(newline))
     return fmt_str
 
 
